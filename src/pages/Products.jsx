@@ -14,11 +14,29 @@ export default function Products() {
   const [quantities, setQuantities] = useState({})
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [history, setHistory] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) navigate('/login')
+    else loadHistory(token)
   }, [navigate])
+
+  const loadHistory = async (tokenParam) => {
+    const token = tokenParam || localStorage.getItem('token')
+    if (!token) return
+    try {
+      setLoadingHistory(true)
+      const { data } = await api.get('/products', { headers: { Authorization: `Bearer ${token}` } })
+      setHistory(Array.isArray(data) ? data : [])
+    } catch (err) {
+      // No bloquea la pantalla; sólo informa en consola
+      console.warn('No se pudo cargar historial', err?.response?.data || err?.message)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
 
   const updateQuantity = (id, value) => {
     const qty = parseInt(value) || 0
@@ -56,6 +74,8 @@ export default function Products() {
       )
       setMessage(data?.message || 'Inventario guardado correctamente')
       setQuantities({})
+      // Refresca historial tras guardar
+      loadHistory(token)
     } catch (err) {
       setMessage(err?.response?.data?.message || 'Error al guardar el inventario')
     } finally {
@@ -69,6 +89,15 @@ export default function Products() {
   }
 
   const selectedItems = Object.entries(quantities).filter(([_, qty]) => qty > 0)
+
+  const formatDate = (iso) => {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleString()
+    } catch {
+      return iso
+    }
+  }
 
   return (
     <div style={{ maxWidth: 720, margin: '20px auto', padding: 24, position: 'relative' }}>
@@ -156,6 +185,30 @@ export default function Products() {
             </div>
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: 24, borderTop: '1px solid #eee', paddingTop: 16 }}>
+        <h3>Historial de selecciones</h3>
+        {loadingHistory ? (
+          <p style={{ color: '#999' }}>Cargando historial...</p>
+        ) : history.length === 0 ? (
+          <p style={{ color: '#999' }}>Aún no tienes selecciones guardadas.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 12 }}>
+            {history.map((h) => (
+              <div key={h._id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Fecha: {formatDate(h.createdAt)}</div>
+                <ul style={{ margin: 0 }}>
+                  {(h.items || []).map((it, idx) => (
+                    <li key={idx}>
+                      {(it.name || it.productId)} — Cantidad: {it.quantity}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
